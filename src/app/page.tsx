@@ -1,4 +1,6 @@
 import Image from "next/image";
+import { Button } from "@/components/ui/button";
+import { Sparkles } from "lucide-react";
 
 export default function Home() {
   return (
@@ -24,6 +26,13 @@ export default function Home() {
             Save and see your changes instantly.
           </li>
         </ol>
+
+        <div className="flex gap-4 items-center flex-col sm:flex-row">
+          <Button className="w-full sm:w-auto" variant="default">
+            <Sparkles className="mr-2" />
+            Shadcn + Lucide Ready
+          </Button>
+        </div>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <a
