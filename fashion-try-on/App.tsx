@@ -5,7 +5,9 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
+import GalleryScreen from './src/screens/GalleryScreen';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
+import { ImageProvider } from './src/context/ImageContext';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -14,6 +16,7 @@ function Tabs() {
   return (
     <Tab.Navigator>
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Gallery" component={GalleryScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -21,11 +24,13 @@ function Tabs() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-        <Stack.Screen name="Details" component={DetailsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <ImageProvider>
+      <NavigationContainer>
+        <Stack.Navigator>
+          <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+          <Stack.Screen name="Details" component={DetailsScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ImageProvider>
   );
 }
