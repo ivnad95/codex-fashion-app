@@ -1,11 +1,25 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { RootTabScreenProps } from '../navigation/types';
+import { View, Button, StyleSheet, Alert, Linking } from 'react-native';
+import { clearStorage } from '../utils/storage';
 
-export default function SettingsScreen({ route }: RootTabScreenProps<'Settings'>) {
+export default function SettingsScreen() {
+  const handleClear = async () => {
+    try {
+      await clearStorage();
+      Alert.alert('Data cleared');
+    } catch (err) {
+      console.error('Failed to clear storage', err);
+      Alert.alert('Failed to clear data');
+    }
+  };
+
+  const handlePrivacy = () => {
+    Linking.openURL('https://example.com/privacy');
+  };
+
   return (
     <View style={styles.container}>
-      <Text>Settings Screen</Text>
-      <Text>{route.name}</Text>
+      <Button title="Clear Stored Data" onPress={handleClear} />
+      <Button title="Privacy Policy" onPress={handlePrivacy} />
     </View>
   );
 }
@@ -15,5 +29,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
   },
 });

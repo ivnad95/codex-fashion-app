@@ -1,7 +1,15 @@
 import { View, Text, Button, StyleSheet } from 'react-native';
+import { useEffect } from 'react';
 import { RootTabScreenProps } from '../navigation/types';
+import { setCacheItem } from '../utils/storage';
 
 export default function HomeScreen({ navigation }: RootTabScreenProps<'Home'>) {
+  useEffect(() => {
+    setCacheItem('lastVisit', new Date().toISOString()).catch((err) => {
+      console.error('Failed to cache last visit', err);
+    });
+  }, []);
+
   return (
     <View style={styles.container}>
       <Text>Home Screen</Text>
