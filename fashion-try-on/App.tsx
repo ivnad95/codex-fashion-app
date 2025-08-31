@@ -1,24 +1,31 @@
-import { StatusBar } from 'expo-status-bar';
-import Constants from 'expo-constants';
-import { StyleSheet, Text, View } from 'react-native';
-import { GOOGLE_API_KEY } from '@env';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-export default function App() {
-  const apiKeyFromConstants = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
+import HomeScreen from './src/screens/HomeScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import DetailsScreen from './src/screens/DetailsScreen';
+import { RootStackParamList, RootTabParamList } from './src/navigation/types';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<RootTabParamList>();
+
+function Tabs() {
   return (
-    <View style={styles.container}>
-      <Text>Key via Constants: {apiKeyFromConstants}</Text>
-      <Text>Key via @env: {GOOGLE_API_KEY}</Text>
-      <StatusBar style="auto" />
-    </View>
+    <Tab.Navigator>
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Settings" component={SettingsScreen} />
+    </Tab.Navigator>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default function App() {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+        <Stack.Screen name="Details" component={DetailsScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
