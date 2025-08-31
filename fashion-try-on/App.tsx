@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
+import GalleryScreen from './src/screens/GalleryScreen';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
 import { ImageProvider } from './src/context/ImageContext';
 
@@ -15,6 +16,7 @@ function Tabs() {
   return (
     <Tab.Navigator>
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Gallery" component={GalleryScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );

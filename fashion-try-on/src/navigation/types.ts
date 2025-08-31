@@ -9,6 +9,7 @@ export type RootStackParamList = {
 
 export type RootTabParamList = {
   Home: undefined;
+  Gallery: undefined;
   Settings: undefined;
 };
 
