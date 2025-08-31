@@ -1,7 +1,11 @@
+
 import { View, Text, Button, StyleSheet, Alert } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
+
 import { RootTabScreenProps } from '../navigation/types';
+import ModelImagePicker from '../components/ModelImagePicker';
+import ClothingImagePicker from '../components/ClothingImagePicker';
 
 export default function HomeScreen({ navigation }: RootTabScreenProps<'Home'>) {
   const processImage = async () => {
@@ -26,8 +30,10 @@ export default function HomeScreen({ navigation }: RootTabScreenProps<'Home'>) {
 
   return (
     <View style={styles.container}>
+
       <Text>Home Screen</Text>
       <Button title="Process Image" onPress={processImage} />
+
       <Button title="Go to Details" onPress={() => navigation.navigate('Details')} />
     </View>
   );
@@ -38,5 +44,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 16,
   },
 });
