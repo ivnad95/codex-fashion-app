@@ -1,11 +1,14 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { useEffect } from 'react';
+import Constants from 'expo-constants';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
+import { saveApiKey } from './src/utils/storage';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
@@ -20,6 +23,14 @@ function Tabs() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const key = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
+    if (key) {
+      // store without logging
+      saveApiKey(key).catch(() => {});
+    }
+  }, []);
+
   return (
     <NavigationContainer>
       <Stack.Navigator>
