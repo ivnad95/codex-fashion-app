@@ -24,17 +24,10 @@ function Tabs() {
 
 export default function App() {
   useEffect(() => {
-    const storeKey = async () => {
-      const key = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
-      if (key) {
-        try {
-          await saveApiKey(key);
-        } catch (err) {
-          console.error('Failed to save API key', err);
-        }
-      }
-    };
-    storeKey();
+    const key = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
+    if (key) {
+      saveApiKey(key);
+    }
   }, []);
 
   return (

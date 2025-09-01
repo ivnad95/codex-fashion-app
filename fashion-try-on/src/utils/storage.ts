@@ -5,7 +5,11 @@ const API_KEY = 'api_key';
 const LAST_VISIT_KEY = 'lastVisit';
 
 export async function saveApiKey(key: string) {
-  await SecureStore.setItemAsync(API_KEY, key);
+  try {
+    await SecureStore.setItemAsync(API_KEY, key);
+  } catch (err) {
+    console.error('Failed to save API key', err);
+  }
 }
 
 export async function getApiKey() {
