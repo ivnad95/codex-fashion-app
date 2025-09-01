@@ -12,14 +12,24 @@ export default function SettingsScreen() {
     }
   };
 
-  const handlePrivacy = () => {
-    Linking.openURL('https://example.com/privacy');
+  const handlePrivacy = async () => {
+    const url = 'https://example.com/privacy';
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert('Unable to open privacy policy');
+    }
   };
 
   return (
     <View style={styles.container}>
-      <Button title="Clear Stored Data" onPress={handleClear} />
-      <Button title="Privacy Policy" onPress={handlePrivacy} />
+      <View style={styles.button}>
+        <Button title="Clear Stored Data" onPress={handleClear} />
+      </View>
+      <View style={styles.button}>
+        <Button title="Privacy Policy" onPress={handlePrivacy} />
+      </View>
     </View>
   );
 }
@@ -29,6 +39,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+  },
+  button: {
+    marginVertical: 6,
   },
 });
