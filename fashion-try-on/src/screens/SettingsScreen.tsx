@@ -3,18 +3,37 @@ import { clearStorage } from '../utils/storage';
 
 export default function SettingsScreen() {
   const handleClear = async () => {
-    await clearStorage();
-    Alert.alert('Data cleared');
+
+    try {
+      await clearStorage();
+      Alert.alert('Data cleared');
+    } catch (err) {
+      console.error('Failed to clear storage', err);
+      Alert.alert('Failed to clear data');
+    }
   };
 
-  const handlePrivacy = () => {
-    Linking.openURL('https://example.com/privacy');
+  const handlePrivacy = async () => {
+    const url = 'https://example.com/privacy';
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert('Unable to open privacy policy');
+    }
+
   };
 
   return (
     <View style={styles.container}>
-      <Button title="Clear Stored Data" onPress={handleClear} />
-      <Button title="Privacy Policy" onPress={handlePrivacy} />
+
+      <View style={styles.button}>
+        <Button title="Clear Stored Data" onPress={handleClear} />
+      </View>
+      <View style={styles.button}>
+        <Button title="Privacy Policy" onPress={handlePrivacy} />
+      </View>
+
     </View>
   );
 }
@@ -25,5 +44,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
+  },
+  button: {
+    marginVertical: 6,
   },
 });

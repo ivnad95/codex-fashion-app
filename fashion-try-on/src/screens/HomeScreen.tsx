@@ -1,12 +1,23 @@
 
 import { View, Text, Button, StyleSheet } from 'react-native';
-import { useEffect } from 'react';
+
+import { useEffect, useState } from 'react';
 import { RootTabScreenProps } from '../navigation/types';
-import { setCacheItem } from '../utils/storage';
+import { saveLastVisit, getLastVisit } from '../utils/storage';
 
 export default function HomeScreen({ navigation }: RootTabScreenProps<'Home'>) {
+  const [lastVisit, setLastVisit] = useState<string | null>(null);
+
   useEffect(() => {
-    setCacheItem('lastVisit', new Date().toISOString()).catch(() => {});
+    const now = new Date().toISOString();
+    saveLastVisit(now).catch((err) => {
+      console.error('Failed to cache last visit', err);
+    });
+    getLastVisit()
+      .then(setLastVisit)
+      .catch((err) => {
+        console.error('Failed to load last visit', err);
+      });
   }, []);
 
 
@@ -14,7 +25,10 @@ export default function HomeScreen({ navigation }: RootTabScreenProps<'Home'>) {
     <View style={styles.container}>
 
       <Text>Home Screen</Text>
-      <Button title="Process Image" onPress={processImage} />
+
+      {lastVisit && (
+        <Text style={styles.visit}>Last visit: {new Date(lastVisit).toLocaleString()}</Text>
+      )}
 
       <Button title="Go to Details" onPress={() => navigation.navigate('Details')} />
     </View>
@@ -27,5 +41,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
+  },
+  visit: {
+    marginVertical: 8,
   },
 });
