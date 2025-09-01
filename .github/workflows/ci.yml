@@ -26,12 +26,12 @@ jobs:
         run: npm test
         working-directory: fashion-try-on
       - name: Build Android
-        run: npx eas build --platform android --profile android --non-interactive
+        run: npx --yes eas-cli build --platform android --profile android --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         working-directory: fashion-try-on
       - name: Build iOS
-        run: npx eas build --platform ios --profile ios --non-interactive
+        run: npx --yes eas-cli build --platform ios --profile ios --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         working-directory: fashion-try-on
