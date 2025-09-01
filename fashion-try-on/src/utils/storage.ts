@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_KEY = 'api_key';
+
 const LAST_VISIT_KEY = 'lastVisit';
 
 export async function saveApiKey(key: string) {
@@ -10,11 +11,13 @@ export async function saveApiKey(key: string) {
   } catch (err) {
     console.error('Failed to save API key', err);
   }
+
 }
 
 export async function getApiKey() {
   return SecureStore.getItemAsync(API_KEY);
 }
+
 
 export async function saveLastVisit(value: string) {
   await AsyncStorage.setItem(LAST_VISIT_KEY, value);
@@ -27,4 +30,5 @@ export async function getLastVisit() {
 export async function clearStorage() {
   await SecureStore.deleteItemAsync(API_KEY);
   await AsyncStorage.removeItem(LAST_VISIT_KEY);
+
 }
