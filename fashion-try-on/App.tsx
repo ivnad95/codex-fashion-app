@@ -2,15 +2,25 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
+import { ReactNode } from 'react';
+
+
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
-import { ImageProvider } from './src/context/ImageContext';
+import { saveApiKey } from './src/utils/storage';
+
+import { saveApiKey } from './src/utils/storage';
+
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
+
+function ImageProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
 
 function Tabs() {
   return (
@@ -23,6 +33,16 @@ function Tabs() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const key = Constants.expoConfig?.extra?.GOOGLE_API_KEY;
+    if (key) {
+
+      // store without logging
+      saveApiKey(key).catch(() => {});
+
+    }
+  }, []);
+
   return (
     <ImageProvider>
       <NavigationContainer>
