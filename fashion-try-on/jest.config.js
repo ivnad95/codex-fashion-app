@@ -1,6 +1,7 @@
 /* eslint-env node */
 /* eslint-disable no-undef */
 module.exports = {
+  setupFiles: ['<rootDir>/jest.setup.js'],
   preset: 'jest-expo',
   transform: {
     '^.+\\.(ts|tsx|js|jsx)$': 'babel-jest',
