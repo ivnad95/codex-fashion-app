@@ -1,57 +1,43 @@
 'use client';
 
-import { BlurView } from 'expo-blur';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-} from 'react-native-reanimated';
 import { colors, spacing } from '@/design-system';
-import { ReactNode, useEffect } from 'react';
-import { ViewStyle } from 'react-native';
+import { ReactNode, useEffect, useState, CSSProperties } from 'react';
 
 interface GlassCardProps {
   children: ReactNode;
-  style?: ViewStyle;
+  style?: CSSProperties;
 }
 
 export function GlassCard({ children, style }: GlassCardProps) {
-  const offset = useSharedValue(20);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    offset.value = 0;
-  }, [offset]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: withSpring(offset.value, { damping: 12 }) }],
-  }));
+    setMounted(true);
+  }, []);
 
   return (
-    <Animated.View
-      style={[
-        {
-          borderRadius: 16,
-          overflow: 'hidden',
-          shadowColor: '#000',
-          shadowOpacity: 0.15,
-          shadowRadius: 20,
-          shadowOffset: { width: 0, height: 10 },
-          margin: spacing.md,
-        },
-        animatedStyle,
-        style,
-      ]}
+    <div
+      style={{
+        borderRadius: 16,
+        overflow: 'hidden',
+        boxShadow: '0 10px 20px rgba(0,0,0,0.15)',
+        margin: spacing.md,
+        transform: mounted ? 'translateY(0)' : 'translateY(20px)',
+        transition: 'transform 0.5s ease-out',
+        ...style,
+      }}
     >
-      <BlurView
-        intensity={50}
-        tint="light"
+      <div
         style={{
           backgroundColor: colors.card,
           padding: spacing.lg,
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
         }}
       >
         {children}
-      </BlurView>
-    </Animated.View>
+      </div>
+    </div>
   );
 }
+
