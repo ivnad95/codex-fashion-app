@@ -1,0 +1,293 @@
+name: Auto Fix Issues and Merge to Main
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    # Run daily at 2 AM UTC to check all branches
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Specific branch to fix (leave empty for all branches)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: write
+
+jobs:
+  detect-and-fix-issues:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ${{ fromJson(needs.get-branches.outputs.branches) }}
+    needs: get-branches
+    if: needs.get-branches.outputs.branches != '[]'
+    
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: |
+          npm ci || npm install
+          
+      - name: Run linting and type checking
+        id: check-issues
+        continue-on-error: true
+        run: |
+          echo "Running initial checks..."
+          npm run lint 2>&1 | tee lint-output.txt || true
+          npm run typecheck 2>&1 | tee typecheck-output.txt || true
+          npm test 2>&1 | tee test-output.txt || true
+          
+          # Check if there are any issues
+          if [ -s lint-output.txt ] || [ -s typecheck-output.txt ] || [ -s test-output.txt ]; then
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+            echo "Issues detected in branch ${{ matrix.branch }}"
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "No issues detected in branch ${{ matrix.branch }}"
+          fi
+          
+      - name: Fix issues with Claude
+        if: steps.check-issues.outputs.has_issues == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "Fixing issues with Claude..."
+          
+          # Create a prompt for Claude with the issues
+          cat > claude-prompt.txt << 'EOF'
+          Please fix the following issues in the codebase:
+          
+          Lint issues:
+          $(cat lint-output.txt 2>/dev/null || echo "None")
+          
+          Type issues:
+          $(cat typecheck-output.txt 2>/dev/null || echo "None")
+          
+          Test failures:
+          $(cat test-output.txt 2>/dev/null || echo "None")
+          
+          Fix all issues and ensure the code passes all checks.
+          EOF
+          
+          # Use Claude API to fix issues
+          npx claude-dev fix --prompt-file claude-prompt.txt --auto-commit false || true
+          
+      - name: Fix issues with Codex (fallback)
+        if: steps.check-issues.outputs.has_issues == 'true'
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          echo "Attempting fixes with Codex..."
+          
+          # Use Codex as fallback
+          npx codex-fix --lint-output lint-output.txt --type-output typecheck-output.txt --test-output test-output.txt || true
+          
+      - name: Verify fixes
+        id: verify-fixes
+        if: steps.check-issues.outputs.has_issues == 'true'
+        run: |
+          echo "Verifying fixes..."
+          npm run lint || exit_lint=$?
+          npm run typecheck || exit_type=$?
+          npm test || exit_test=$?
+          
+          if [ "${exit_lint:-0}" -eq 0 ] && [ "${exit_type:-0}" -eq 0 ] && [ "${exit_test:-0}" -eq 0 ]; then
+            echo "fixes_successful=true" >> $GITHUB_OUTPUT
+            echo "All issues fixed successfully!"
+          else
+            echo "fixes_successful=false" >> $GITHUB_OUTPUT
+            echo "Some issues remain unfixed"
+          fi
+          
+      - name: Commit fixes
+        if: steps.check-issues.outputs.has_issues == 'true' && steps.verify-fixes.outputs.fixes_successful == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git diff --staged --quiet || git commit -m "🤖 Auto-fix issues in branch ${{ matrix.branch }}
+          
+          - Fixed lint issues
+          - Fixed type checking issues
+          - Fixed failing tests
+          
+          Co-authored-by: Claude <claude@anthropic.com>
+          Co-authored-by: Codex <codex@openai.com>"
+          
+      - name: Push fixes
+        if: steps.check-issues.outputs.has_issues == 'true' && steps.verify-fixes.outputs.fixes_successful == 'true'
+        run: |
+          git push origin ${{ matrix.branch }}
+          
+      - name: Create or update PR to main
+        if: steps.verify-fixes.outputs.fixes_successful == 'true' || steps.check-issues.outputs.has_issues == 'false'
+        id: create-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if PR already exists
+          existing_pr=$(gh pr list --base main --head ${{ matrix.branch }} --json number --jq '.[0].number' || echo "")
+          
+          if [ -z "$existing_pr" ]; then
+            # Create new PR
+            pr_url=$(gh pr create \
+              --base main \
+              --head ${{ matrix.branch }} \
+              --title "🔄 Auto-merge: ${{ matrix.branch }} → main" \
+              --body "## Automated PR
+          
+          This PR was automatically created to merge fixes from \`${{ matrix.branch }}\` into \`main\`.
+          
+          ### ✅ Status
+          - All lint issues resolved
+          - All type checking issues resolved  
+          - All tests passing
+          
+          ### 🤖 Fixed by
+          - Claude AI
+          - OpenAI Codex
+          
+          This PR will be automatically merged if all checks pass." \
+              --label "auto-merge" \
+              --label "automated")
+            echo "pr_number=${pr_url##*/}" >> $GITHUB_OUTPUT
+          else
+            echo "PR already exists: #$existing_pr"
+            echo "pr_number=$existing_pr" >> $GITHUB_OUTPUT
+          fi
+
+  get-branches:
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.get-branches.outputs.branches }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Get all branches except main
+        id: get-branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            # Use specific branch if provided
+            branches='["${{ github.event.inputs.branch }}"]'
+          else
+            # Get all branches except main
+            branches=$(git branch -r | grep -v 'HEAD\|main' | sed 's/origin\///' | jq -R -s -c 'split("\n")[:-1]')
+          fi
+          echo "branches=$branches" >> $GITHUB_OUTPUT
+          echo "Found branches: $branches"
+
+  merge-and-cleanup:
+    needs: detect-and-fix-issues
+    runs-on: ubuntu-latest
+    if: always() && needs.detect-and-fix-issues.result == 'success'
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: Setup git
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+      - name: Auto-merge PRs and cleanup branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Checking for PRs ready to merge..."
+          
+          # Get all PRs with auto-merge label
+          prs=$(gh pr list --base main --label "auto-merge" --json number,headRefName,mergeable,mergeStateStatus --jq '.[]')
+          
+          echo "$prs" | while IFS= read -r pr_data; do
+            if [ -z "$pr_data" ]; then continue; fi
+            
+            pr_number=$(echo "$pr_data" | jq -r '.number')
+            branch_name=$(echo "$pr_data" | jq -r '.headRefName')
+            mergeable=$(echo "$pr_data" | jq -r '.mergeable')
+            merge_status=$(echo "$pr_data" | jq -r '.mergeStateStatus')
+            
+            echo "Processing PR #$pr_number from branch $branch_name"
+            
+            if [ "$mergeable" = "MERGEABLE" ] && [ "$merge_status" = "CLEAN" ]; then
+              echo "Merging PR #$pr_number..."
+              
+              # Merge the PR
+              gh pr merge $pr_number --auto --squash --delete-branch
+              
+              echo "✅ PR #$pr_number merged and branch $branch_name deleted"
+            else
+              echo "⏳ PR #$pr_number not ready to merge (status: $merge_status)"
+            fi
+          done
+          
+      - name: Clean up stale branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Cleaning up stale branches..."
+          
+          # Get all branches except main
+          git fetch --all --prune
+          
+          for branch in $(git branch -r | grep -v 'HEAD\|main' | sed 's/origin\///'); do
+            # Check if branch has been merged
+            if git merge-base --is-ancestor origin/$branch origin/main 2>/dev/null; then
+              echo "Deleting merged branch: $branch"
+              git push origin --delete $branch || echo "Could not delete $branch"
+            else
+              # Check if branch is stale (no commits in 30 days)
+              last_commit=$(git log -1 --format=%ct origin/$branch)
+              current_time=$(date +%s)
+              days_old=$(( (current_time - last_commit) / 86400 ))
+              
+              if [ $days_old -gt 30 ]; then
+                echo "Branch $branch is $days_old days old - considering for deletion"
+                # Create an issue for manual review
+                gh issue create \
+                  --title "Stale branch: $branch" \
+                  --body "Branch \`$branch\` has not been updated in $days_old days. Please review and merge or delete." \
+                  --label "stale-branch" || true
+              fi
+            fi
+          done
+          
+      - name: Summary report
+        if: always()
+        run: |
+          echo "## 📊 Automation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Branches processed:" >> $GITHUB_STEP_SUMMARY
+          git branch -r | grep -v 'HEAD\|main' | sed 's/origin\///' | while read branch; do
+            echo "- $branch" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### PRs merged:" >> $GITHUB_STEP_SUMMARY
+          gh pr list --state merged --limit 10 --json number,title --jq '.[] | "- #\(.number): \(.title)"' >> $GITHUB_STEP_SUMMARY || echo "No recent merges" >> $GITHUB_STEP_SUMMARY
