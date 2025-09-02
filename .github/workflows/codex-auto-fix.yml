@@ -70,9 +70,17 @@ jobs:
             npx tsc --noEmit 2>&1 | tee type_output.txt || HAS_TYPE_ERRORS=true
           fi
           
-          # Check for test failures
+          # Check for test failures - handle different test runners
           if [ -f "package.json" ] && grep -q "\"test\"" package.json; then
-            npm test -- --passWithNoTests 2>&1 | tee test_output.txt || HAS_TEST_FAILURES=true
+            # Try to run tests with appropriate flags based on test runner
+            if grep -q "jest" package.json; then
+              npm test -- --passWithNoTests 2>&1 | tee test_output.txt || HAS_TEST_FAILURES=true
+            elif grep -q "vitest" package.json; then
+              npm test -- --run --passWithNoTests 2>&1 | tee test_output.txt || HAS_TEST_FAILURES=true
+            else
+              # For other test runners, just run without special flags
+              npm test 2>&1 | tee test_output.txt || HAS_TEST_FAILURES=true
+            fi
           fi
           
           # Set outputs
@@ -177,7 +185,14 @@ jobs:
           fi
           
           if [ -f "package.json" ] && grep -q "\"test\"" package.json; then
-            npm test -- --passWithNoTests || STILL_HAS_ISSUES=true
+            # Handle different test runners
+            if grep -q "jest" package.json; then
+              npm test -- --passWithNoTests || STILL_HAS_ISSUES=true
+            elif grep -q "vitest" package.json; then
+              npm test -- --run --passWithNoTests || STILL_HAS_ISSUES=true
+            else
+              npm test || STILL_HAS_ISSUES=true
+            fi
           fi
           
           if [ "$STILL_HAS_ISSUES" = true ]; then
