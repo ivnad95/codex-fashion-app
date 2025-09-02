@@ -2,16 +2,14 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-import { ReactNode } from 'react';
-
+import { ReactNode, useEffect } from 'react';
+import Constants from 'expo-constants';
 
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DetailsScreen from './src/screens/DetailsScreen';
 import GalleryScreen from './src/screens/GalleryScreen';
 import { RootStackParamList, RootTabParamList } from './src/navigation/types';
-import { saveApiKey } from './src/utils/storage';
-
 import { saveApiKey } from './src/utils/storage';
 
 
