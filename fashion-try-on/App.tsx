@@ -1,8 +1,9 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useEffect } from 'react';
-import Constants from 'expo-constants';
+
+import { ReactNode } from 'react';
+
 
 import HomeScreen from './src/screens/HomeScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
@@ -16,6 +17,10 @@ import { saveApiKey } from './src/utils/storage';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<RootTabParamList>();
+
+function ImageProvider({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+}
 
 function Tabs() {
   return (
