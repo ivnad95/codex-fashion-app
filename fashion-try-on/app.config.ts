@@ -11,12 +11,17 @@ export default {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
+      bundleIdentifier: 'com.fashion.tryon',
     },
     android: {
       edgeToEdgeEnabled: true,
+      package: 'com.fashion.tryon',
     },
     extra: {
       GOOGLE_API_KEY: process.env.GOOGLE_API_KEY,
+      eas: {
+        projectId: 'c5090e18-1381-42c9-a058-bbb57a8ab4bd',
+      },
     },
   },
 };
