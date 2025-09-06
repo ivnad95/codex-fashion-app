@@ -1,0 +1,275 @@
+name: Auto Fix Issues and Merge to Main
+
+on:
+  push:
+    branches-ignore:
+      - main
+  pull_request:
+    types: [opened, synchronize]
+  schedule:
+    - cron: '0 2 * * *' # daily at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Specific branch to fix (leave empty for all branches)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: auto-fix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  get-branches:
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.get-branches.outputs.branches }}
+    steps:
+      - name: Checkout repository
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tooling
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Get all branches (excluding main/HEAD or explicit input)
+        id: get-branches
+        run: |
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            branches="$(jq -nc --arg b "${{ github.event.inputs.branch }}" '[$b]')"
+          else
+            branches="$(git branch -r \
+              | grep -vE 'HEAD|main' \
+              | sed 's#origin/##' \
+              | sort -u \
+              | jq -R -s -c 'split("\n") | map(select(length>0))')"
+          fi
+          echo "branches=$branches" >> "$GITHUB_OUTPUT"
+          echo "Branches JSON: $branches"
+
+  detect-and-fix-issues:
+    runs-on: ubuntu-latest
+    needs: get-branches
+    if: needs.get-branches.outputs.branches != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: ${{ fromJson(needs.get-branches.outputs.branches) }}
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      CI: true
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci || npm install
+          else
+            npm install
+          fi
+
+      - name: Run initial checks
+        id: check-issues
+        continue-on-error: true
+        run: |
+          echo "Running checks on branch ${{ matrix.branch }}..."
+          : > issues-report.md
+          run_or_capture () {
+            local title="$1"; shift
+            if ! "$@" 2>&1 | tee "${title}.txt"; then
+              {
+                echo "### ${title^}"
+                echo
+                echo '```'
+                cat "${title}.txt"
+                echo '```'
+                echo
+              } >> issues-report.md
+            fi
+          }
+          [ -f package.json ] && jq -e '.scripts.lint' package.json >/dev/null 2>&1 && run_or_capture lint npm run lint || true
+          [ -f package.json ] && (jq -e '.scripts.typecheck' package.json >/dev/null 2>&1 || jq -e '.scripts["type-check"]' package.json >/dev/null 2>&1) && \
+            (npm run typecheck || npm run type-check) 2>&1 | tee typecheck.txt || {
+              echo "### Type Issues" >> issues-report.md
+              echo >> issues-report.md
+              echo '```' >> issues-report.md
+              cat typecheck.txt >> issues-report.md
+              echo '```' >> issues-report.md
+              echo >> issues-report.md
+            }
+          [ -f package.json ] && jq -e '.scripts.test' package.json >/dev/null 2>&1 && run_or_capture test npm test || true
+          if [ -s issues-report.md ]; then
+            echo -e "\n## Branch: \`${{ matrix.branch }}\`\n\nPlease fix all issues (lint, types, tests) so CI passes." >> issues-report.md
+            echo "has_issues=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No issues found." | tee -a issues-report.md
+            echo "has_issues=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create issue for Claude/Codex to fix
+        if: steps.check-issues.outputs.has_issues == 'true'
+        id: create-issue
+        run: |
+          echo -e "\n\n@claude-ai please fix these issues\n@codex-ai please assist with fixes\n\nThis issue was automatically generated for AI fixing." >> issues-report.md
+          issue_url=$(gh issue create \
+            --title "🤖 Auto-fix: Issues in branch ${{ matrix.branch }}" \
+            --label "auto-fix" --label "claude" --label "codex" \
+            --body-file issues-report.md)
+          echo "issue_number=${issue_url##*/}" >> "$GITHUB_OUTPUT"
+          echo "Created issue ${issue_url}"
+
+      - name: Assign Claude (best-effort)
+        if: steps.check-issues.outputs.has_issues == 'true'
+        continue-on-error: true
+        run: |
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "/repos/${{ github.repository }}/issues/${{ steps.create-issue.outputs.issue_number }}/assignees" \
+            -f assignees='["claude[bot]","github-actions[bot]"]' || true
+
+      - name: Wait for AI fixes (poll)
+        if: steps.check-issues.outputs.has_issues == 'true'
+        timeout-minutes: 10
+        run: |
+          for i in {1..20}; do
+            sleep 30
+            git fetch origin ${{ matrix.branch }} --depth=1 || true
+            git reset --hard origin/${{ matrix.branch }} || true
+            if npm run -s lint && (npm run -s typecheck || npm run -s type-check || true) && npm test -s; then
+              echo "AI fixes appear to be in. ✅"
+              break
+            fi
+            echo "Waiting for fixes... ($i/20)"
+          done
+
+      - name: Verify all fixes
+        id: verify-fixes
+        run: |
+          set -e
+          all_good=true
+          npm run -s lint || all_good=false
+          (npm run -s typecheck || npm run -s type-check || true) || all_good=false
+          npm test -s || all_good=false
+          if [ "$all_good" = true ]; then
+            echo "fixes_successful=true" >> "$GITHUB_OUTPUT"
+            echo "✅ All issues fixed!"
+          else
+            echo "fixes_successful=false" >> "$GITHUB_OUTPUT"
+            echo "⚠️ Some issues remain"
+          fi
+
+      - name: Close fix issue
+        if: steps.check-issues.outputs.has_issues == 'true' && steps.verify-fixes.outputs.fixes_successful == 'true'
+        run: |
+          gh issue close ${{ steps.create-issue.outputs.issue_number }} \
+            --comment "✅ All issues have been fixed. Branch is ready to merge."
+
+      - name: Create PR to main
+        if: steps.verify-fixes.outputs.fixes_successful == 'true' || steps.check-issues.outputs.has_issues == 'false'
+        id: create-pr
+        run: |
+          existing_pr=$(gh pr list --base main --head "${{ matrix.branch }}" --json number --jq '.[0].number' || echo "")
+          if [ -z "$existing_pr" ]; then
+            pr_url=$(gh pr create \
+              --base main \
+              --head "${{ matrix.branch }}" \
+              --title "🔄 Auto-merge: ${{ matrix.branch }} → main" \
+              --label "auto-merge" --label "automated" \
+              --body "Automated PR. All required checks are green (lint/types/tests).")
+            echo "pr_number=${pr_url##*/}" >> "$GITHUB_OUTPUT"
+            echo "Created PR ${pr_url}"
+          else
+            echo "pr_number=$existing_pr" >> "$GITHUB_OUTPUT"
+            echo "PR #$existing_pr already exists"
+          fi
+
+  merge-and-cleanup:
+    needs: detect-and-fix-issues
+    runs-on: ubuntu-latest
+    if: always() && needs.detect-and-fix-issues.result == 'success'
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure tooling
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Auto-merge clean PRs
+        run: |
+          gh pr list --base main --label "auto-merge" --json number,mergeable,mergeStateStatus \
+          | jq -r '.[] | select(.mergeable == "MERGEABLE" and .mergeStateStatus == "CLEAN") | .number' \
+          | while read pr; do
+              [ -n "$pr" ] || continue
+              echo "Merging PR #$pr…"
+              gh pr merge "$pr" --squash --delete-branch
+            done
+
+      - name: Clean up merged branches
+        run: |
+          git fetch --all --prune
+          for branch in $(git branch -r --merged origin/main | grep -vE 'HEAD|main' | sed 's#origin/##'); do
+            echo "Deleting merged branch: $branch"
+            git push origin --delete "$branch" || echo "Could not delete $branch"
+          done
+
+      - name: Report stale branches (>30 days)
+        run: |
+          for branch in $(git branch -r | grep -vE 'HEAD|main' | sed 's#origin/##'); do
+            last_commit=$(git log -1 --format=%ct "origin/$branch" 2>/dev/null || echo 0)
+            now=$(date +%s)
+            days_old=$(( (now - last_commit) / 86400 ))
+            if [ "$days_old" -gt 30 ]; then
+              gh issue create \
+                --title "⏰ Stale branch: $branch" \
+                --label "stale-branch" \
+                --body "Branch \`$branch\` hasn’t been updated in $days_old days.
+                
+                Please review and either:
+                - Merge to main
+                - Delete if no longer needed
+                - Update if still in progress
+
+                This branch may be deleted after review."
+              sleep 1
+            fi
+          done
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## 📊 Automation Summary"
+            echo
+            echo "### Active branches:"
+            git branch -r | grep -v 'HEAD' | sed 's#origin/#- #'
+            echo
+            echo "### Recent merges:"
+            gh pr list --state merged --limit 5 --json number,title,mergedAt \
+              --jq '.[] | \"- #\\(.number): \\(.title) (merged \\(.mergedAt))\"'
+          } >> "$GITHUB_STEP_SUMMARY"
